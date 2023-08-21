@@ -92,7 +92,6 @@ public class MyBot : IChessBot
             board.MakeMove(move);
             float score = -negamax(board, depth - 1, -beta, -alpha).Item1;
             board.UndoMove(move);
-
             if(score > bestScore)
             {
                 bestScore = score;
@@ -188,7 +187,6 @@ public class MyBot : IChessBot
             sum += -values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, !board.IsWhiteToMove));
 
         }
-
         return sum;
     }
 }
