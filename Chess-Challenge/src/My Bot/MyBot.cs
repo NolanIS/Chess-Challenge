@@ -27,9 +27,8 @@ public class MyBot : IChessBot
         //Can this be removed?
         //I need to figure out how to analyze memory usage in this environment
         Transpositions.Clear();
-        
 
-        return negamax(board, 6, float.NegativeInfinity, float.PositiveInfinity).Item2;
+        return negamax(board, 4, float.NegativeInfinity, float.PositiveInfinity).Item2;
     }
 
     public (float, Move) negamax(Board board, int depth, float alpha, float beta)
@@ -44,6 +43,7 @@ public class MyBot : IChessBot
             return (-90000, Move.NullMove);
         }
         Move TMove = Move.NullMove;
+        
         if (Transpositions.ContainsKey(board.ZobristKey))
         {
             StateInfo s = Transpositions[board.ZobristKey];
@@ -65,7 +65,7 @@ public class MyBot : IChessBot
                 }
             }
         }
-
+        
 
         //Can I replace this with board.GetLegalMovesNonAlloc?
         Move[] possibleMoves = board.GetLegalMoves();
@@ -107,6 +107,7 @@ public class MyBot : IChessBot
                 }
             }
         }
+        
         if (Transpositions.ContainsKey(board.ZobristKey)) Transpositions.Remove(board.ZobristKey);
         int abflag = 0;
         if(bestScore <= a)
@@ -118,7 +119,7 @@ public class MyBot : IChessBot
             abflag = 2;
         }
         Transpositions.Add(board.ZobristKey, new StateInfo(bestScore, bestMove, depth, abflag));
-
+        
         return (bestScore, bestMove);
     }
 
@@ -181,7 +182,7 @@ public class MyBot : IChessBot
             return -90000;
         }
         int[] values = {0, 1, 3, 4, 5, 9 };
-        for(int i = 1; i < 5; i++)
+        for(int i = 1; i <= 5; i++)
         {
             sum += values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, board.IsWhiteToMove));
             sum += -values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, !board.IsWhiteToMove));
