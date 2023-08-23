@@ -24,11 +24,24 @@ public class MyBot : IChessBot
 
     public Move Think(Board board, Timer timer)
     {
-        //Can this be removed?
-        //I need to figure out how to analyze memory usage in this environment
         Transpositions.Clear();
 
-        return negamax(board, 4, float.NegativeInfinity, float.PositiveInfinity).Item2;
+
+        float bestScore = float.NegativeInfinity;
+        Move bestMove = Move.NullMove;
+
+        for(int i  = 0; i < 6; i++) { 
+            (float score, Move move) = negamax(board, i, float.NegativeInfinity, float.PositiveInfinity);
+            bestScore = score;
+            bestMove = move;
+        }
+        if (bestMove != Move.NullMove)
+        {
+            return bestMove;
+        }
+        Console.WriteLine("!!!!Returned a Null Move!!!!");
+        
+        return board.GetLegalMoves()[0];
     }
 
     public (float, Move) negamax(Board board, int depth, float alpha, float beta)
@@ -36,7 +49,8 @@ public class MyBot : IChessBot
         float a = alpha;
         if(depth == 0)
         {
-            return (evaluate(board, depth), Move.NullMove);
+            //return (evaluate(board), Move.NullMove);
+            return (quiesce(board, alpha, beta), Move.NullMove);
         }
         if(board.IsInCheckmate() || board.IsDraw())
         {
@@ -77,7 +91,7 @@ public class MyBot : IChessBot
                 moveScores[i] = (int)PieceType.King;
             }
             if (possibleMoves[i].IsCapture) { 
-            moveScores[i] = (int)possibleMoves[i].CapturePieceType - (int)possibleMoves[i].MovePieceType;
+                moveScores[i] = 5*(int)possibleMoves[i].CapturePieceType - (int)possibleMoves[i].MovePieceType;
             }else
             {
                 moveScores[i] = (int)possibleMoves[i].MovePieceType;
@@ -106,8 +120,12 @@ public class MyBot : IChessBot
                 }
             }
         }
+
+        if (Transpositions.ContainsKey(board.ZobristKey))
+        {
+            Transpositions.Remove(board.ZobristKey);
+        }
         
-        if (Transpositions.ContainsKey(board.ZobristKey)) Transpositions.Remove(board.ZobristKey);
         int abflag = 0;
         if(bestScore <= a)
         {
@@ -169,13 +187,36 @@ public class MyBot : IChessBot
 
         return (resultMoves, resultScores);
     }
+
+    public float quiesce(Board board, float alpha, float beta)
+    {
+        float standing_pat = evaluate(board);
+        if(standing_pat >= beta)
+            return beta;
+        if (alpha < standing_pat)
+            alpha = standing_pat;
+
+        foreach(Move move in board.GetLegalMoves(true))
+        {
+            board.MakeMove(move);
+            float score = -quiesce(board, -beta, -alpha);
+            board.UndoMove(move);
+
+            if(score >= beta)
+                return beta;
+            if (score > alpha)
+                alpha = score;
+        }
+        return alpha;
+                
+    }
     
 
 
-    public float evaluate(Board board, int depth)
+    public float evaluate(Board board)
     {
         
-        float sum = 0;
+        float materialScore = 0;
         if (board.IsInCheckmate())  // Check if the CURRENT player is in checkmate (NEGATIVE SCORE)
         {
             return -90000;
@@ -183,11 +224,23 @@ public class MyBot : IChessBot
         int[] values = {0, 1, 3, 4, 5, 9 };
         for(int i = 1; i <= 5; i++)
         {
-            sum += values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, board.IsWhiteToMove));
-            sum += -values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, !board.IsWhiteToMove));
+            materialScore += values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, board.IsWhiteToMove));
+            materialScore += -values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, !board.IsWhiteToMove));
 
         }
-        return sum;
+
+
+
+        float positionalScore = 10 * board.GetLegalMoves().Length;
+        if(board.TrySkipTurn()) {
+            positionalScore -= board.GetLegalMoves().Length;
+
+            board.UndoSkipTurn();
+        }
+
+
+
+        return 100 * materialScore + positionalScore;
     }
 }
 
