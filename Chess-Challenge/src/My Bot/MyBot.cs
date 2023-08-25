@@ -47,11 +47,6 @@ public class MyBot : IChessBot
     public (float, Move) negamax(Board board, int depth, float alpha, float beta)
     {
         float a = alpha;
-        if(depth == 0)
-        {
-            //return (evaluate(board), Move.NullMove);
-            return (quiesce(board, alpha, beta), Move.NullMove);
-        }
         if(board.IsInCheckmate() || board.IsDraw())
         {
             return (-90000, Move.NullMove);
@@ -66,86 +61,74 @@ public class MyBot : IChessBot
             {// This search is not going further than previous searches,
              // we can return the previously computed score.
                 if(s.abflag == 1)
-                {
                     beta = Math.Min(beta, s.score);
-                }
                 if(s.abflag == 2)
-                {
                     alpha = Math.Max(alpha, s.score);
-                }
                 if(alpha >= beta || s.abflag == 0)
-                {
                     return (s.score, s.move);
-                }
             }
         }
-        
+        if(depth <= 0) { 
+            float standing_pat = evaluate(board);
+            if (standing_pat >= beta)
+                return (beta, Move.NullMove);
+            if (alpha < standing_pat)
+                alpha = standing_pat;
+        }
+
 
         //Can I replace this with board.GetLegalMovesNonAlloc?
-        Move[] possibleMoves = board.GetLegalMoves();
+        Move[] possibleMoves = board.GetLegalMoves(depth <= 0);
         int[] moveScores = new int[possibleMoves.Length];
         for(int i = 0; i < possibleMoves.Length; i++)
         {
             if (possibleMoves[i] == TMove)
-            {
                 moveScores[i] = (int)PieceType.King;
-            }
-            if (possibleMoves[i].IsCapture) { 
+            if (possibleMoves[i].IsCapture)
                 moveScores[i] = 5*(int)possibleMoves[i].CapturePieceType - (int)possibleMoves[i].MovePieceType;
-            }else
-            {
+            else
                 moveScores[i] = (int)possibleMoves[i].MovePieceType;
-            }
         }
         (Move[] sortedMoves, int[] sortedScores) = mergeSort(possibleMoves, moveScores, 0, possibleMoves.Length-1);
 
         Move bestMove = Move.NullMove;
-        float bestScore = float.NegativeInfinity;
         foreach(Move move in sortedMoves)
         {
             board.MakeMove(move);
             float score = -negamax(board, depth - 1, -beta, -alpha).Item1;
             board.UndoMove(move);
-            if(score > bestScore)
+            if(score > alpha)
             {
-                bestScore = score;
+                alpha = score;
                 bestMove = move;
-                if (score > alpha)
-                {
-                    alpha = score;
-                }
-                if (alpha >= beta)
-                {
+                if (score >= beta) { 
+                    alpha = beta;
                     break;
                 }
             }
         }
 
         if (Transpositions.ContainsKey(board.ZobristKey))
-        {
             Transpositions.Remove(board.ZobristKey);
-        }
         
         int abflag = 0;
-        if(bestScore <= a)
-        {
+        if(alpha <= a)
             abflag = 1;
-        }
-        if(bestScore >= beta)
-        {
+        if(alpha >= beta)
             abflag = 2;
-        }
-        Transpositions.Add(board.ZobristKey, new StateInfo(bestScore, bestMove, depth, abflag));
+        Transpositions.Add(board.ZobristKey, new StateInfo(alpha, bestMove, depth, abflag));
         
-        return (bestScore, bestMove);
+        return (alpha, bestMove);
     }
 
     public (Move[], int[]) mergeSort(Move[] moves, int[] scores, int first, int last)
     {
+        if(last < first)
+            return (moves, scores);
+        
         if(first == last)
-        {
             return (new Move[] { moves[first] }, new int[] { scores[first] });
-        }
+        
         int mid = (first + last) / 2;
         (Move[] leftm, int[] lefts) = mergeSort(moves, scores, first, mid);
         (Move[] rightm, int[] rights) = mergeSort(moves, scores, mid + 1, last);
@@ -188,29 +171,7 @@ public class MyBot : IChessBot
         return (resultMoves, resultScores);
     }
 
-    public float quiesce(Board board, float alpha, float beta)
-    {
-        float standing_pat = evaluate(board);
-        if(standing_pat >= beta)
-            return beta;
-        if (alpha < standing_pat)
-            alpha = standing_pat;
 
-        foreach(Move move in board.GetLegalMoves(true))
-        {
-            board.MakeMove(move);
-            float score = -quiesce(board, -beta, -alpha);
-            board.UndoMove(move);
-
-            if(score >= beta)
-                return beta;
-            if (score > alpha)
-                alpha = score;
-        }
-        return alpha;
-                
-    }
-    
 
 
     public float evaluate(Board board)
@@ -237,7 +198,6 @@ public class MyBot : IChessBot
 
             board.UndoSkipTurn();
         }
-
 
 
         return 100 * materialScore + positionalScore;
