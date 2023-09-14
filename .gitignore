@@ -3,9 +3,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
-.DS_Store
-.csproj
-.sln
+*.DS_Store
+*.csproj
+*.sln
 
 # User-specific files
 *.rsuser
