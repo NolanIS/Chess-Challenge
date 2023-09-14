@@ -7,12 +7,14 @@ public class MyBot : IChessBot
 
     struct StateInfo
     {
+        public ulong key;
         public float score;
         public Move move;
         public float examined_depth;
         public int abflag;
-        public StateInfo(float s, Move m, float depth, int flag)
+        public StateInfo(float s, Move m, float depth, int flag, ulong k)
         {
+            key = k;
             score = s;
             move = m;
             examined_depth = depth;
@@ -24,7 +26,7 @@ public class MyBot : IChessBot
 
     public Move Think(Board board, Timer timer)
     {
-        Transpositions.Clear();
+        //Transpositions.Clear();
 
 
         float bestScore = float.NegativeInfinity;
@@ -36,9 +38,8 @@ public class MyBot : IChessBot
             bestMove = move;
         }
         if (bestMove != Move.NullMove)
-        {
             return bestMove;
-        }
+        
         Console.WriteLine("!!!!Returned a Null Move!!!!");
         
         return board.GetLegalMoves()[0];
@@ -55,11 +56,14 @@ public class MyBot : IChessBot
         
         if (Transpositions.ContainsKey(board.ZobristKey))
         {
+            
             StateInfo s = Transpositions[board.ZobristKey];
+            
             TMove = s.move;
             if (s.examined_depth >= depth)
             {// This search is not going further than previous searches,
              // we can return the previously computed score.
+                
                 if(s.abflag == 1)
                     beta = Math.Min(beta, s.score);
                 if(s.abflag == 2)
@@ -79,21 +83,21 @@ public class MyBot : IChessBot
 
         //Can I replace this with board.GetLegalMovesNonAlloc?
         Move[] possibleMoves = board.GetLegalMoves(depth <= 0);
-        int[] moveScores = new int[possibleMoves.Length];
-        for(int i = 0; i < possibleMoves.Length; i++)
+        PriorityQueue<Move, int> pq = new PriorityQueue<Move, int>();
+        foreach(Move move in possibleMoves)
         {
-            if (possibleMoves[i] == TMove)
-                moveScores[i] = (int)PieceType.King;
-            if (possibleMoves[i].IsCapture)
-                moveScores[i] = 5*(int)possibleMoves[i].CapturePieceType - (int)possibleMoves[i].MovePieceType;
+            if (move == TMove) {
+                pq.Enqueue(move, -(int)PieceType.King);
+            } else if (move.IsCapture)
+                pq.Enqueue(move, -5*(int)move.CapturePieceType - (int)move.MovePieceType);
             else
-                moveScores[i] = (int)possibleMoves[i].MovePieceType;
+                pq.Enqueue(move, -(int)move.MovePieceType);
         }
-        (Move[] sortedMoves, int[] sortedScores) = mergeSort(possibleMoves, moveScores, 0, possibleMoves.Length-1);
 
         Move bestMove = Move.NullMove;
-        foreach(Move move in sortedMoves)
+        while(pq.Count > 0)
         {
+            Move move = pq.Dequeue();
             board.MakeMove(move);
             float score = -negamax(board, depth - 1, -beta, -alpha).Item1;
             board.UndoMove(move);
@@ -116,91 +120,96 @@ public class MyBot : IChessBot
             abflag = 1;
         if(alpha >= beta)
             abflag = 2;
-        Transpositions.Add(board.ZobristKey, new StateInfo(alpha, bestMove, depth, abflag));
+        Transpositions.Add(board.ZobristKey, new StateInfo(alpha, bestMove, depth, abflag, board.ZobristKey));
         
         return (alpha, bestMove);
     }
-
-    public (Move[], int[]) mergeSort(Move[] moves, int[] scores, int first, int last)
-    {
-        if(last < first)
-            return (moves, scores);
-        
-        if(first == last)
-            return (new Move[] { moves[first] }, new int[] { scores[first] });
-        
-        int mid = (first + last) / 2;
-        (Move[] leftm, int[] lefts) = mergeSort(moves, scores, first, mid);
-        (Move[] rightm, int[] rights) = mergeSort(moves, scores, mid + 1, last);
-
-        int i = 0, j = 0;
-        Move[] resultMoves = new Move[leftm.Length + rightm.Length];
-        int[] resultScores = new int[lefts.Length + rights.Length];
-
-        while (i < lefts.Length && j < rights.Length)
-        {
-            if (lefts[i] < rights[j])
-            {
-                resultScores[i + j] = rights[j];
-                resultMoves[i + j] = rightm[j];
-                j++;
-            }
-            else
-            {
-                resultScores[i + j] = lefts[i];
-                resultMoves[i + j] = leftm[i];
-                i++;
-            }
-        }
-
-        while(i < lefts.Length)
-        {
-            resultMoves[i + j] = leftm[i];
-            resultScores[i + j] = lefts[i];
-            i++;
-        }
-        while (j < rights.Length)
-        {
-            resultMoves[i + j] = rightm[j];
-            resultScores[i + j] = rights[j];
-            j++;
-        }
-
-
-
-        return (resultMoves, resultScores);
-    }
-
-
-
 
     public float evaluate(Board board)
     {
         
         float materialScore = 0;
+        float phase = 0;
         if (board.IsInCheckmate())  // Check if the CURRENT player is in checkmate (NEGATIVE SCORE)
         {
-            return -90000;
+            return -900000;
         }
         int[] values = {0, 1, 3, 4, 5, 9 };
+        int[] phases = { 0, 0, 1, 1, 2, 4 }; //Phase in opening = 24, phase with only kings/pawns = 0
         for(int i = 1; i <= 5; i++)
         {
-            materialScore += values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, board.IsWhiteToMove));
-            materialScore += -values[i] * BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, !board.IsWhiteToMove));
-
+            int numPlayer = BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, board.IsWhiteToMove));
+            int numEnemy = BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard((PieceType)i, !board.IsWhiteToMove));
+            materialScore += values[i] * numPlayer;
+            materialScore += -values[i] * numEnemy;
+            phase += phases[i] * (numPlayer + numEnemy);
         }
+        phase = 24 - phase;
+        phase = phase < 16 ? phase / 16 : 1;
 
+        // Bishop pair penalty (drops the value of a remaining bishop if it doesn't have a pair)
+        if (BitboardHelper.GetNumberOfSetBits(board.GetPieceBitboard(PieceType.Bishop, board.IsWhiteToMove)) == 1)
+            materialScore -= 1;
+        
 
-
-        float positionalScore = 10 * board.GetLegalMoves().Length;
+        float movabilityScore = 10 * board.GetLegalMoves().Length;
+        
         if(board.TrySkipTurn()) {
-            positionalScore -= board.GetLegalMoves().Length;
+            movabilityScore -= board.GetLegalMoves().Length;
 
             board.UndoSkipTurn();
         }
 
 
-        return 100 * materialScore + positionalScore;
+
+
+        //Connected pawns and passed pawns
+        ulong pawnBitboard = board.GetPieceBitboard(PieceType.Pawn, board.IsWhiteToMove);
+        ulong unmodBitboard = pawnBitboard | board.GetPieceBitboard(PieceType.Pawn, !board.IsWhiteToMove);
+        int connectedPawns = 0;
+        int passedPawns = 0;
+
+        int negativeCorrection = board.IsWhiteToMove ? 1 : -1;
+
+        while (pawnBitboard != 0)
+        {
+            int pos = BitboardHelper.ClearAndGetIndexOfLSB(ref pawnBitboard);
+            foreach (int i in new int[] {-7, 7, -9, 9})
+            {
+                int y = i + pos;
+                if (y >= 7 && y <= 55 && y / 8 != pos / 8)
+                    if (BitboardHelper.SquareIsSet(pawnBitboard, new Square(y)))
+                    {
+                        connectedPawns++;
+                        break;
+                    }
+            }
+            bool passed = true;
+            foreach (int i in new int[] {pos-1, pos, pos+1})
+            {
+                if (i / 8 == pos / 8)
+                {
+                    int y = i + 8 * negativeCorrection;
+                    while(y <= 63 && y >= 0)
+                    {
+                        if(BitboardHelper.SquareIsSet(unmodBitboard, new Square(y)))
+                        {
+                            passed = false;
+                            break;
+                        }
+
+                        y += 8 * negativeCorrection;
+                    }
+                }
+            }
+            passedPawns += passed ? 1 : 0;
+        }
+        float openingScore = 1000 * materialScore + 20 * movabilityScore + 500 * connectedPawns;
+        float endingScore = 1000 * materialScore + 100 * passedPawns;
+
+
+
+        return (1-phase) * openingScore + phase * endingScore;
     }
 }
 
