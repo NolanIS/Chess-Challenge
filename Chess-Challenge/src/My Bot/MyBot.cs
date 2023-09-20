@@ -7,14 +7,12 @@ public class MyBot : IChessBot
 
     struct StateInfo
     {
-        public ulong key;
         public float score;
         public Move move;
         public float examined_depth;
         public int abflag;
-        public StateInfo(float s, Move m, float depth, int flag, ulong k)
+        public StateInfo(float s, Move m, float depth, int flag)
         {
-            key = k;
             score = s;
             move = m;
             examined_depth = depth;
@@ -22,7 +20,6 @@ public class MyBot : IChessBot
         }
     }
     private Dictionary<ulong, StateInfo> Transpositions = new Dictionary<ulong, StateInfo>();
-
 
     public Move Think(Board board, Timer timer)
     {
@@ -32,16 +29,12 @@ public class MyBot : IChessBot
         float bestScore = float.NegativeInfinity;
         Move bestMove = Move.NullMove;
 
-        for(int i  = 0; i < 6; i++) { 
+        for(int i  = 0; i < 5; i++) { 
             (float score, Move move) = negamax(board, i, float.NegativeInfinity, float.PositiveInfinity);
             bestScore = score;
             bestMove = move;
         }
         if (bestMove != Move.NullMove) {
-            //Console.WriteLine(((int)(middlegameTable[bestMove.TargetSquare.Index] >> (((int)bestMove.MovePieceType - 1) * 9)) & 511) - 167);
-            //int loc = bestMove.TargetSquare.Index;
-            //loc = board.IsWhiteToMove ? loc ^ 56 : loc;
-            //Console.WriteLine((int)((middlegameTable[loc] >> (((int)bestMove.MovePieceType - 1) * 9)) & 511) - 167);
             return bestMove;
         }
 
@@ -73,7 +66,7 @@ public class MyBot : IChessBot
                     beta = Math.Min(beta, s.score);
                 if(s.abflag == 2)
                     alpha = Math.Max(alpha, s.score);
-                if(alpha >= beta || s.abflag == 0)
+                if(alpha >= beta || s.abflag == 0) 
                     return (s.score, s.move);
             }
         }
@@ -92,7 +85,7 @@ public class MyBot : IChessBot
         foreach(Move move in possibleMoves)
         {
             if (move == TMove) {
-                pq.Enqueue(move, -(int)PieceType.King);
+                pq.Enqueue(move, -100);
             } else if (move.IsCapture)
                 pq.Enqueue(move, -5*(int)move.CapturePieceType - (int)move.MovePieceType);
             else
@@ -125,7 +118,7 @@ public class MyBot : IChessBot
             abflag = 1;
         if(alpha >= beta)
             abflag = 2;
-        Transpositions.Add(board.ZobristKey, new StateInfo(alpha, bestMove, depth, abflag, board.ZobristKey));
+        Transpositions.Add(board.ZobristKey, new StateInfo(alpha, bestMove, depth, abflag));
         
         return (alpha, bestMove);
     }
@@ -187,8 +180,8 @@ public class MyBot : IChessBot
                 {
                     int loc = BitboardHelper.ClearAndGetIndexOfLSB(ref r);
                     loc = board.IsWhiteToMove ? loc ^ 56 : loc;
-                    mg_score += mul * mg_value[i] + (int)((middlegameTable[loc] >> ((i-1) * 9)) & 511) - 167;
-                    eg_score += mul * eg_value[i] + (int)((endgameTable[loc] >> ((i-1) * 9)) & 511) - 167;
+                    mg_score += mul * (mg_value[i] + (int)((middlegameTable[loc] >> ((i-1) * 9)) & 511) - 167);
+                    eg_score += mul * (eg_value[i] + (int)((endgameTable[loc] >> ((i-1) * 9)) & 511) - 167);
                 }
                 mul *= -1;
             }
