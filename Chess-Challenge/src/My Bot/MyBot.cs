@@ -21,29 +21,41 @@ public class MyBot : IChessBot
     }
     private Dictionary<ulong, StateInfo> Transpositions = new Dictionary<ulong, StateInfo>();
 
+    bool isDoneThinking(Board board, Timer timer)
+    {
+        return timer.MillisecondsRemaining / 10 < (timer.MillisecondsElapsedThisTurn);
+    }
+
     public Move Think(Board board, Timer timer)
     {
-        //Transpositions.Clear();
+        if(board.GetLegalMoves().Length == 1)
+            return board.GetLegalMoves()[0];
+        
 
 
         float bestScore = float.NegativeInfinity;
         Move bestMove = Move.NullMove;
-
-        for(int i  = 0; i < 5; i++) { 
-            (float score, Move move) = negamax(board, i, float.NegativeInfinity, float.PositiveInfinity);
-            bestScore = score;
-            bestMove = move;
+        int i = 0;
+        while (!isDoneThinking(board, timer)) {
+            
+            (float score, Move move) = negamax(board, i, float.NegativeInfinity, float.PositiveInfinity, timer);
+            if(move != Move.NullMove) { 
+                bestScore = score;
+                bestMove = move;
+            }
+            i++;
         }
-        if (bestMove != Move.NullMove) {
+        //Console.WriteLine(board.PlyCount + ": " + i + ", " + timer.MillisecondsElapsedThisTurn/1000.0);
+        if (bestMove != Move.NullMove)
             return bestMove;
-        }
+        
 
         Console.WriteLine("!!!!Returned a Null Move!!!!");
         
         return board.GetLegalMoves()[0];
     }
 
-    public (float, Move) negamax(Board board, int depth, float alpha, float beta)
+    private (float, Move) negamax(Board board, int depth, float alpha, float beta, Timer timer)
     {
         float a = alpha;
         if(board.IsInCheckmate() || board.IsDraw())
@@ -70,7 +82,7 @@ public class MyBot : IChessBot
                     return (s.score, s.move);
             }
         }
-        if(depth <= 0) { 
+        if (depth <= 0) {
             float standing_pat = evaluate(board);
             if (standing_pat >= beta)
                 return (beta, Move.NullMove);
@@ -78,8 +90,10 @@ public class MyBot : IChessBot
                 alpha = standing_pat;
         }
 
-
-        //Can I replace this with board.GetLegalMovesNonAlloc?
+        if(isDoneThinking(board, timer))
+            return (evaluate(board), Move.NullMove);
+        
+        
         Move[] possibleMoves = board.GetLegalMoves(depth <= 0);
         PriorityQueue<Move, int> pq = new PriorityQueue<Move, int>();
         foreach(Move move in possibleMoves)
@@ -95,9 +109,11 @@ public class MyBot : IChessBot
         Move bestMove = Move.NullMove;
         while(pq.Count > 0)
         {
+            if (isDoneThinking(board, timer))
+                return (evaluate(board), Move.NullMove);
             Move move = pq.Dequeue();
             board.MakeMove(move);
-            float score = -negamax(board, depth - 1, -beta, -alpha).Item1;
+            float score = -negamax(board, depth - 1, -beta, -alpha, timer).Item1;
             board.UndoMove(move);
             if(score > alpha)
             {
@@ -110,15 +126,16 @@ public class MyBot : IChessBot
             }
         }
 
-        if (Transpositions.ContainsKey(board.ZobristKey))
-            Transpositions.Remove(board.ZobristKey);
-        
         int abflag = 0;
-        if(alpha <= a)
+        if (alpha <= a)
             abflag = 1;
-        if(alpha >= beta)
+        if (alpha >= beta)
             abflag = 2;
-        Transpositions.Add(board.ZobristKey, new StateInfo(alpha, bestMove, depth, abflag));
+        StateInfo info = new StateInfo(alpha, bestMove, depth, abflag);
+        if (Transpositions.ContainsKey(board.ZobristKey))
+            Transpositions[board.ZobristKey] = info;
+        else
+            Transpositions.Add(board.ZobristKey, info);
         
         return (alpha, bestMove);
     }
@@ -151,7 +168,7 @@ public class MyBot : IChessBot
 
 
 
-    public float evaluate(Board board)
+    float evaluate(Board board)
     {
         
         float phase = 0;
