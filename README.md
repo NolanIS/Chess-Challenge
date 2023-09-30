@@ -2,6 +2,10 @@
 
 This is my attempt at [SebLague's Chess-Challenge](https://github.com/SebLague/Chess-Challenge)
 
+My submission uses the NegaMax algorithm with Alpha-Beta pruning and a Quiescence search. Iterative Deepening is used in combination with simple time management. The most "interesting" moves are searched first based on MVV-LVA, and the Transposition Table, and they are quickly scored and then sorted using a Priority Queue. For a heuristic function I used PeSTO's Evaluation Function, a tapered Piece-Square Tables Only evaluation function.
+
+While I initially wanted to experiment with creating my own heuristic function, I ultimately didn't have the time or bot [brain-capacity](https://github.com/SebLague/Chess-Challenge#bot-brain-capacity) (MyBot.cs could only have up to 1024 "tokens"). In the future I would like to experiment with this as well as generating my own piece-square tables.
+
 ## Iterations:
 1) NegaMax with alpha-beta pruning
 NegaMax is used along with alpha-beta pruning to search for the best performing sequence of moves, based on the evaluation function.
