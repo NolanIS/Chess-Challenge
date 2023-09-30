@@ -12,14 +12,12 @@ namespace ChessChallenge.Example
 
         struct StateInfo
         {
-            public ulong key;
             public float score;
             public Move move;
             public float examined_depth;
             public int abflag;
-            public StateInfo(float s, Move m, float depth, int flag, ulong k)
+            public StateInfo(float s, Move m, float depth, int flag)
             {
-                key = k;
                 score = s;
                 move = m;
                 examined_depth = depth;
@@ -28,36 +26,43 @@ namespace ChessChallenge.Example
         }
         private Dictionary<ulong, StateInfo> Transpositions = new Dictionary<ulong, StateInfo>();
 
+        bool isDoneThinking(Board board, Timer timer)
+        {
+            return timer.MillisecondsRemaining / 10 < (timer.MillisecondsElapsedThisTurn);
+        }
 
         public Move Think(Board board, Timer timer)
         {
-            //Transpositions.Clear();
+            if (board.GetLegalMoves().Length == 1)
+                return board.GetLegalMoves()[0];
+
 
 
             float bestScore = float.NegativeInfinity;
             Move bestMove = Move.NullMove;
+            int i = 0;
+            while (!isDoneThinking(board, timer))
+            {
 
-            for (int i = 0; i < 6; i++)
-            {
-                (float score, Move move) = negamax(board, i, float.NegativeInfinity, float.PositiveInfinity);
-                bestScore = score;
-                bestMove = move;
+                (float score, Move move) = negamax(board, i, float.NegativeInfinity, float.PositiveInfinity, timer);
+                if (move != Move.NullMove)
+                {
+                    bestScore = score;
+                    bestMove = move;
+                }
+                i++;
             }
+            //Console.WriteLine(board.PlyCount + ": " + i + ", " + timer.MillisecondsElapsedThisTurn/1000.0);
             if (bestMove != Move.NullMove)
-            {
-                //Console.WriteLine(((int)(middlegameTable[bestMove.TargetSquare.Index] >> (((int)bestMove.MovePieceType - 1) * 9)) & 511) - 167);
-                //int loc = bestMove.TargetSquare.Index;
-                //loc = board.IsWhiteToMove ? loc ^ 56 : loc;
-                //Console.WriteLine((int)((middlegameTable[loc] >> (((int)bestMove.MovePieceType - 1) * 9)) & 511) - 167);
                 return bestMove;
-            }
+
 
             Console.WriteLine("!!!!Returned a Null Move!!!!");
 
             return board.GetLegalMoves()[0];
         }
 
-        public (float, Move) negamax(Board board, int depth, float alpha, float beta)
+        private (float, Move) negamax(Board board, int depth, float alpha, float beta, Timer timer)
         {
             float a = alpha;
             if (board.IsInCheckmate() || board.IsDraw())
@@ -93,15 +98,17 @@ namespace ChessChallenge.Example
                     alpha = standing_pat;
             }
 
+            if (isDoneThinking(board, timer))
+                return (evaluate(board), Move.NullMove);
 
-            //Can I replace this with board.GetLegalMovesNonAlloc?
+
             Move[] possibleMoves = board.GetLegalMoves(depth <= 0);
             PriorityQueue<Move, int> pq = new PriorityQueue<Move, int>();
             foreach (Move move in possibleMoves)
             {
                 if (move == TMove)
                 {
-                    pq.Enqueue(move, -(int)PieceType.King);
+                    pq.Enqueue(move, -100);
                 }
                 else if (move.IsCapture)
                     pq.Enqueue(move, -5 * (int)move.CapturePieceType - (int)move.MovePieceType);
@@ -112,9 +119,11 @@ namespace ChessChallenge.Example
             Move bestMove = Move.NullMove;
             while (pq.Count > 0)
             {
+                if (isDoneThinking(board, timer))
+                    return (evaluate(board), Move.NullMove);
                 Move move = pq.Dequeue();
                 board.MakeMove(move);
-                float score = -negamax(board, depth - 1, -beta, -alpha).Item1;
+                float score = -negamax(board, depth - 1, -beta, -alpha, timer).Item1;
                 board.UndoMove(move);
                 if (score > alpha)
                 {
@@ -128,15 +137,16 @@ namespace ChessChallenge.Example
                 }
             }
 
-            if (Transpositions.ContainsKey(board.ZobristKey))
-                Transpositions.Remove(board.ZobristKey);
-
             int abflag = 0;
             if (alpha <= a)
                 abflag = 1;
             if (alpha >= beta)
                 abflag = 2;
-            Transpositions.Add(board.ZobristKey, new StateInfo(alpha, bestMove, depth, abflag, board.ZobristKey));
+            StateInfo info = new StateInfo(alpha, bestMove, depth, abflag);
+            if (Transpositions.ContainsKey(board.ZobristKey))
+                Transpositions[board.ZobristKey] = info;
+            else
+                Transpositions.Add(board.ZobristKey, info);
 
             return (alpha, bestMove);
         }
@@ -169,7 +179,7 @@ namespace ChessChallenge.Example
 
 
 
-        public float evaluate(Board board)
+        float evaluate(Board board)
         {
 
             float phase = 0;
@@ -198,8 +208,8 @@ namespace ChessChallenge.Example
                     {
                         int loc = BitboardHelper.ClearAndGetIndexOfLSB(ref r);
                         loc = board.IsWhiteToMove ? loc ^ 56 : loc;
-                        mg_score += mul * mg_value[i] + (int)((middlegameTable[loc] >> ((i - 1) * 9)) & 511) - 167;
-                        eg_score += mul * eg_value[i] + (int)((endgameTable[loc] >> ((i - 1) * 9)) & 511) - 167;
+                        mg_score += mul * (mg_value[i] + (int)((middlegameTable[loc] >> ((i - 1) * 9)) & 511) - 167);
+                        eg_score += mul * (eg_value[i] + (int)((endgameTable[loc] >> ((i - 1) * 9)) & 511) - 167);
                     }
                     mul *= -1;
                 }

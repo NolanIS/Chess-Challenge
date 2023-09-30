@@ -23,7 +23,7 @@ public class MyBot : IChessBot
 
     bool isDoneThinking(Board board, Timer timer)
     {
-        return timer.MillisecondsRemaining / 10 < (timer.MillisecondsElapsedThisTurn);
+        return timer.MillisecondsRemaining / 20 < (timer.MillisecondsElapsedThisTurn);
     }
 
     public Move Think(Board board, Timer timer)
@@ -39,18 +39,14 @@ public class MyBot : IChessBot
         while (!isDoneThinking(board, timer)) {
             
             (float score, Move move) = negamax(board, i, float.NegativeInfinity, float.PositiveInfinity, timer);
-            if(move != Move.NullMove) { 
+            if(move != Move.NullMove && score > bestScore) { 
                 bestScore = score;
                 bestMove = move;
             }
             i++;
         }
-        //Console.WriteLine(board.PlyCount + ": " + i + ", " + timer.MillisecondsElapsedThisTurn/1000.0);
         if (bestMove != Move.NullMove)
             return bestMove;
-        
-
-        Console.WriteLine("!!!!Returned a Null Move!!!!");
         
         return board.GetLegalMoves()[0];
     }
@@ -91,7 +87,7 @@ public class MyBot : IChessBot
         }
 
         if(isDoneThinking(board, timer))
-            return (evaluate(board), Move.NullMove);
+            return (beta, Move.NullMove);
         
         
         Move[] possibleMoves = board.GetLegalMoves(depth <= 0);
@@ -110,7 +106,7 @@ public class MyBot : IChessBot
         while(pq.Count > 0)
         {
             if (isDoneThinking(board, timer))
-                return (evaluate(board), Move.NullMove);
+                return (beta, Move.NullMove);
             Move move = pq.Dequeue();
             board.MakeMove(move);
             float score = -negamax(board, depth - 1, -beta, -alpha, timer).Item1;
