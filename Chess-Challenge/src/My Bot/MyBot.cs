@@ -45,12 +45,8 @@ public class MyBot : IChessBot
             }
             i++;
         }
-        //Console.WriteLine(board.PlyCount + ": " + i + ", " + timer.MillisecondsElapsedThisTurn/1000.0);
         if (bestMove != Move.NullMove)
             return bestMove;
-        
-
-        Console.WriteLine("!!!!Returned a Null Move!!!!");
         
         return board.GetLegalMoves()[0];
     }
